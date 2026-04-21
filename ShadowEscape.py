@@ -62,10 +62,10 @@ except:
 BACKGROUND_IMAGE = None
 BACKGROUND_START = None
 try:
-    bg = Image.open("background.avif").resize((WINDOW_WIDTH, WINDOW_HEIGHT - 60))
+    bg = Image.open("bg.jpg").resize((WINDOW_WIDTH, WINDOW_HEIGHT - 60))
     BACKGROUND_IMAGE = pygame.image.fromstring(bg.tobytes(), bg.size, bg.mode)
     
-    bg_full = Image.open("background.avif").resize((WINDOW_WIDTH, WINDOW_HEIGHT))
+    bg_full = Image.open("bg.jpg").resize((WINDOW_WIDTH, WINDOW_HEIGHT))
     BACKGROUND_START = pygame.image.fromstring(bg_full.tobytes(), bg_full.size, bg_full.mode)
 except:
     pass
