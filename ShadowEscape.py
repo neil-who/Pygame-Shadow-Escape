@@ -77,7 +77,7 @@ GHOST_JUMPSCARE = GHOST_IMG if GHOST_IMG else None
 
 # Utility Functions
 def load_map():
-    """Load the game map and return walls, keys, door, and player position."""
+    # Load the game map and return walls, keys, door, and player position.
     walls = []
     keys = []
     door = None
