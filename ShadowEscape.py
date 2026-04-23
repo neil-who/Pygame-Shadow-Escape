@@ -4,6 +4,7 @@ import random
 from PIL import Image
 
 pygame.init()
+pygame.mixer.init()
 
 # Game Settings
 TILE_SIZE = 32
@@ -14,7 +15,7 @@ ENEMY_MOVE_DELAY = 500
 ANIMATION_SPEED = 150
 TIME_LIMIT = 300
 INITIAL_LIVES = 3
-JUMP_SCARE_DURATION = 500
+JUMP_SCARE_DURATION = 1000
 ENEMY_POSITIONS = [(7, 3), (15, 9), (9, 15)]
 
 # Colors
@@ -52,11 +53,17 @@ FONT = pygame.font.SysFont(None, 28)
 FONT_LARGE = pygame.font.SysFont(None, 36, bold=True)
 
 # Load Images
+HEART_IMG = None
 try:
     PLAYER_IMG = pygame.transform.scale(pygame.image.load("Character.png"), (TILE_SIZE, TILE_SIZE))
     GHOST_IMG = pygame.transform.scale(pygame.image.load("Ghost.png"), (TILE_SIZE, TILE_SIZE))
 except:
     PLAYER_IMG = GHOST_IMG = None
+
+try:
+    HEART_IMG = pygame.transform.scale(pygame.image.load("heart.webp"), (36, 36))
+except:
+    HEART_IMG = None
 
 # Load Background
 BACKGROUND_IMAGE = None
@@ -70,8 +77,36 @@ try:
 except:
     pass
 
+# Load Audio Files
+START_MUSIC = None
+AMBIENT_MUSIC = None
+JUMP_SCARE_SOUND = None
+
+try:
+    START_MUSIC = pygame.mixer.Sound("simplesound-horror-trailer-443327.mp3")
+except:
+    pass
+
+try:
+    AMBIENT_MUSIC = pygame.mixer.Sound("universfield-horror-background-atmosphere-025-499631.mp3")
+except:
+    pass
+
+try:
+    JUMP_SCARE_SOUND = pygame.mixer.Sound("mixkit-horror-swish-1495.wav")
+except:
+    pass
+
 # Animation Frames
-PLAYER_FRAMES = {d: [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None] for d in ['down', 'up', 'left', 'right']}
+# Player frames for running animation (using same image but can be extended)
+PLAYER_FRAMES = {
+    'down': [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None],
+    'up': [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None],
+    'left': [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None],
+    'right': [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None]
+}
+
+# Ghost frames with animation
 GHOST_FRAMES = [GHOST_IMG, GHOST_IMG] if GHOST_IMG else [None, None]
 GHOST_JUMPSCARE = GHOST_IMG if GHOST_IMG else None
 
@@ -140,14 +175,46 @@ def draw_darkness(screen, player):
 
 def draw_player(screen, rect, frame, direction):
     if PLAYER_FRAMES[direction][frame % 2]:
-        screen.blit(PLAYER_FRAMES[direction][frame % 2], rect)
+        # Running animation with bobbing effect
+        bob_offset = int(2 * ((frame // 2) % 2))
+        bob_rect = rect.copy()
+        bob_rect.y -= bob_offset
+        screen.blit(PLAYER_FRAMES[direction][frame % 2], bob_rect)
 
 def draw_enemy(screen, rect, frame):
     if GHOST_FRAMES[frame % 2]:
-        screen.blit(GHOST_FRAMES[frame % 2], rect)
+        # Ghost floating animation with scale and bob effect
+        float_offset = int(3 * ((frame // 2) % 2))
+        float_rect = rect.copy()
+        float_rect.y -= float_offset
+        
+        # Add scale variation for pulsing effect
+        scale_factor = 0.95 + (0.1 * ((frame // 2) % 2))
+        scaled_size = int(TILE_SIZE * scale_factor)
+        scaled_ghost = pygame.transform.scale(GHOST_FRAMES[frame % 2], (scaled_size, scaled_size))
+        
+        # Center the scaled ghost in the rect
+        offset_x = (TILE_SIZE - scaled_size) // 2
+        offset_y = (TILE_SIZE - scaled_size) // 2
+        screen.blit(scaled_ghost, (float_rect.x + offset_x, float_rect.y + offset_y))
 
 def draw_key(screen, rect):
-    pygame.draw.circle(screen, COLOR_KEY, rect.center, 8)
+    # Draw a fancy key design
+    key_x, key_y = rect.centerx, rect.centery
+    
+    # Key head (circle)
+    pygame.draw.circle(screen, COLOR_KEY, (key_x - 6, key_y), 6)
+    pygame.draw.circle(screen, (200, 170, 0), (key_x - 6, key_y), 6, 2)
+    
+    # Key shaft (rectangle)
+    pygame.draw.rect(screen, COLOR_KEY, (key_x - 2, key_y - 2, 10, 4))
+    
+    # Key teeth (two small rectangles)
+    pygame.draw.rect(screen, COLOR_KEY, (key_x + 7, key_y - 1, 2, 2))
+    pygame.draw.rect(screen, COLOR_KEY, (key_x + 7, key_y + 1, 2, 2))
+    
+    # Inner design on key head
+    pygame.draw.circle(screen, (200, 170, 0), (key_x - 6, key_y), 3)
 
 def draw_walls_with_bricks(screen, walls):
     for wall in walls:
@@ -176,11 +243,25 @@ def draw_door_design(screen, rect, is_locked):
 
 def draw_hearts(screen, lives):
     for i in range(INITIAL_LIVES):
-        color = (255, 0, 0) if i < lives else (100, 100, 100)
-        x = WINDOW_WIDTH - (INITIAL_LIVES * 30) - 10 + i * 30
-        pygame.draw.circle(screen, color, (x + 5, WINDOW_HEIGHT - 35), 5)
-        pygame.draw.circle(screen, color, (x + 15, WINDOW_HEIGHT - 35), 5)
-        pygame.draw.polygon(screen, color, [(x, WINDOW_HEIGHT - 30), (x + 20, WINDOW_HEIGHT - 30), (x + 10, WINDOW_HEIGHT - 20)])
+        x = WINDOW_WIDTH - (INITIAL_LIVES * 45) - 15 + i * 45
+        y = WINDOW_HEIGHT - 45
+        
+        if HEART_IMG:
+            if i < lives:
+                screen.blit(HEART_IMG, (x, y))
+            else:
+                gray_heart = HEART_IMG.copy()
+                gray_heart.fill((100, 100, 100, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                screen.blit(gray_heart, (x, y))
+        else:
+            color = (255, 0, 0) if i < lives else (100, 100, 100)
+            pygame.draw.circle(screen, color, (x - 3, y - 5), 4)
+            pygame.draw.circle(screen, color, (x + 7, y - 5), 4)
+            pygame.draw.polygon(screen, color, [
+                (x - 6, y - 2),
+                (x + 10, y - 2),
+                (x + 2, y + 8)
+            ])
 
 def draw_start_screen(screen):
     if BACKGROUND_START:
@@ -194,9 +275,25 @@ def draw_start_screen(screen):
     
     title_font = pygame.font.SysFont(None, 72, bold=True)
     title = title_font.render("SHADOW ESCAPE", True, (150, 150, 150))
-    screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 3))
+    screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, WINDOW_HEIGHT // 5))
     
-    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT // 2 + 80, 200, 60)
+    # Instructions
+    instructions = [
+        "INSTRUCTIONS:",
+        "Use ARROW KEYS to move through the maze",
+        "Collect all KEYS to unlock the door",
+        "Avoid the GHOSTS or you'll lose a life",
+        "You have 3 lives - escape before time runs out!"
+    ]
+    
+    instr_font = pygame.font.SysFont(None, 20)
+    y_offset = WINDOW_HEIGHT // 2 - 50
+    for line in instructions:
+        instr_text = instr_font.render(line, True, (200, 200, 200))
+        screen.blit(instr_text, (WINDOW_WIDTH // 2 - instr_text.get_width() // 2, y_offset))
+        y_offset += 30
+    
+    button_rect = pygame.Rect(WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT - 120, 200, 60)
     pygame.draw.rect(screen, (50, 150, 50), button_rect)
     pygame.draw.rect(screen, (100, 255, 100), button_rect, 3)
     
@@ -228,6 +325,8 @@ class Game:
         self.enemy_animation_frame = self.enemy_animation_time = 0
         self.jump_scare_active = self.jump_scare_time = 0
         self.start_button_rect = None
+        self.retry_button_rect = None
+        self.ambient_music_playing = False
 
     def handle_start_input(self):
         for event in pygame.event.get():
@@ -241,6 +340,10 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
+            
+            if event.type == pygame.MOUSEBUTTONDOWN and self.game_over:
+                if self.retry_button_rect and self.retry_button_rect.collidepoint(event.pos):
+                    return self.reset_game()
             
             if event.type == pygame.KEYDOWN and not self.game_over:
                 dx = dy = 0
@@ -262,6 +365,29 @@ class Game:
                         self.move_timer = 0
         
         return True
+    
+    def reset_game(self):
+        # Reset game state for retry
+        self.walls, self.keys, self.door, self.player = load_map()
+        self.player_start_pos = self.player.copy()
+        self.enemies = [pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE) for x, y in ENEMY_POSITIONS]
+        self.enemy_dirs = [random_enemy_path((e.x, e.y), self.walls) for e in self.enemies]
+        
+        self.collected_keys = 0
+        self.timer = TIME_LIMIT * 1000
+        self.lives = INITIAL_LIVES
+        self.game_over = self.win = False
+        self.move_timer = self.enemy_move_timer = 0
+        self.player_animation_frame = self.player_animation_time = 0
+        self.player_direction = 'down'
+        self.enemy_animation_frame = self.enemy_animation_time = 0
+        self.jump_scare_active = self.jump_scare_time = 0
+        
+        # Play ambient music again
+        if AMBIENT_MUSIC:
+            AMBIENT_MUSIC.play(-1)
+        
+        return True
 
     def update(self, dt):
         if self.jump_scare_active:
@@ -272,6 +398,11 @@ class Game:
         
         if self.game_over:
             return
+        
+        # Start ambient music if not playing
+        if not self.ambient_music_playing and AMBIENT_MUSIC:
+            AMBIENT_MUSIC.play(-1)
+            self.ambient_music_playing = True
         
         self.timer -= dt
         self.move_timer += dt
@@ -303,6 +434,11 @@ class Game:
             if enemy.colliderect(self.player):
                 self.jump_scare_active = 1
                 self.jump_scare_time = 0
+                
+                # Play jump scare sound
+                if JUMP_SCARE_SOUND:
+                    JUMP_SCARE_SOUND.play()
+                
                 self.lives -= 1
                 if self.lives <= 0:
                     self.game_over = True
@@ -327,6 +463,11 @@ class Game:
             self.screen.blit(BACKGROUND_IMAGE, (0, 0))
         else:
             self.screen.fill((50, 50, 50))
+        
+        # Make background slightly transparent
+        bg_overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT - 60), pygame.SRCALPHA)
+        bg_overlay.fill((0, 0, 0, 20))
+        self.screen.blit(bg_overlay, (0, 0))
         
         draw_walls_with_bricks(self.screen, self.walls)
         
@@ -353,18 +494,14 @@ class Game:
         
         if self.jump_scare_active:
             progress = self.jump_scare_time / JUMP_SCARE_DURATION
-            scale = 0.3 + (progress * 2.5) if progress < 0.5 else 0.3 + ((1 - progress) * 2.5)
-            size = int(TILE_SIZE * 4 * scale)
+            # Make ghost much bigger when popping up
+            scale = 1 + (progress * 5) if progress < 0.5 else 1 + ((1 - progress) * 5)
+            size = int(TILE_SIZE * 7 * scale)
             if GHOST_JUMPSCARE:
                 ghost = pygame.transform.scale(GHOST_JUMPSCARE, (size, size))
-                x = WINDOW_WIDTH // 2 - size // 2 + random.randint(-5, 5) if progress < 0.3 else WINDOW_WIDTH // 2 - size // 2
+                x = WINDOW_WIDTH // 2 - size // 2 + random.randint(-10, 10) if progress < 0.3 else WINDOW_WIDTH // 2 - size // 2
                 y = WINDOW_HEIGHT // 2 - size // 2 - 30
                 self.screen.blit(ghost, (x, y))
-            
-            flash = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT - 60))
-            flash.set_alpha(int(255 * (1 - progress)))
-            flash.fill((255, 0, 0))
-            self.screen.blit(flash, (0, 0))
         
         if self.game_over:
             overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -375,16 +512,35 @@ class Game:
             msg = "YOU ESCAPED!" if self.win else "GAME OVER"
             color = (0, 255, 0) if self.win else (255, 100, 100)
             text = FONT_LARGE.render(msg, True, color)
-            self.screen.blit(text, (WINDOW_WIDTH // 2 - text.get_width() // 2, WINDOW_HEIGHT // 2 - 30))
+            self.screen.blit(text, (WINDOW_WIDTH // 2 - text.get_width() // 2, WINDOW_HEIGHT // 2 - 80))
+            
+            # Draw retry button
+            retry_rect = pygame.Rect(WINDOW_WIDTH // 2 - 100, WINDOW_HEIGHT // 2 + 40, 200, 60)
+            pygame.draw.rect(self.screen, (150, 100, 50), retry_rect)
+            pygame.draw.rect(self.screen, (255, 200, 100), retry_rect, 3)
+            
+            retry_text = pygame.font.SysFont(None, 40, bold=True).render("RETRY", True, (255, 255, 255))
+            self.screen.blit(retry_text, (retry_rect.centerx - retry_text.get_width() // 2, retry_rect.centery - retry_text.get_height() // 2))
+            
+            self.retry_button_rect = retry_rect
         
         pygame.display.flip()
 
     def run(self):
         running = True
         while running and not self.started:
+            # Play start music on start screen
+            if START_MUSIC and not self.ambient_music_playing:
+                START_MUSIC.play()
+                self.ambient_music_playing = True
+            
             running, self.started = self.handle_start_input()
             self.start_button_rect = draw_start_screen(self.screen)
             self.clock.tick(60)
+        
+        # Stop start music and play ambient music
+        if START_MUSIC:
+            START_MUSIC.stop()
         
         while running:
             running = self.handle_input()
