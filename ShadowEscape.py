@@ -98,7 +98,7 @@ except:
     pass
 
 # Animation Frames
-# Player frames for running animation (using same image but can be extended)
+# Player frames for running animation
 PLAYER_FRAMES = {
     'down': [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None],
     'up': [PLAYER_IMG, PLAYER_IMG] if PLAYER_IMG else [None, None],
